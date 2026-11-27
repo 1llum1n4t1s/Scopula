@@ -1,6 +1,6 @@
 # Scopulaの開発
 
-Rustの`target`フォルダーの古い成果物を定期的に掃除するCLI。利用者向けの説明は[README](README.md)。Rustの版は[`rust-toolchain.toml`](rust-toolchain.toml)、依存の解決は`Cargo.lock`に従う。
+Rustの`target`フォルダーの古い成果物を定期的に掃除するCLI。利用者向けの説明は[README](README.md)、設計は[DESIGN.md](DESIGN.md)、変更履歴は[CHANGELOG.md](CHANGELOG.md)。Rustの版は[`rust-toolchain.toml`](rust-toolchain.toml)、依存の解決は`Cargo.lock`に従う。
 
 ## 共通の規則
 
@@ -15,15 +15,8 @@ Rustの`target`フォルダーの古い成果物を定期的に掃除するCLI�
 - テストの疑似データは`%TEMP%\scopula-tests\<pid>-<名前>`に作り、テストでは削除しない。溜まったら`%TEMP%\scopula-tests`をPrunlet CLIで`delete --recursive`する。
 - コードコメントは日本語。cccc（`cccc <パス>`の`cognitive`）が5以下で正規表現のない関数にはテストを書かない。
 
-## 設計メモ
+## トピック別の詳細
 
-- `es.exe`の標準出力はANSIコードページで日本語が化けるため、`-export-json`（UTF-8）を`%TEMP%\scopula\<実行ID>\es-result.json`へ書き出して読む。`-dc`などの索引外の列は使わない（Everythingが固まる）。
-- target判定は`CACHEDIR.TAG`の本文（cargo製）。P判定は`.cargo-lock`の有無で、triple下も見る。
-- R3は、新配置`build\<pkg>\<16桁>`のユニットを指紋の`deps`（u64をリトルエンディアンの16進にしたものが依存先）でたどる。P の最終ビルドから`seed_days`以内を起点に推移的に使用中とし、Pをまたいで索引化する。壊れたPが1つでもあるtargetではR1・R3・R6を止める（保守側）。R6は、R6の対象にならないPの起点から届くユニットを持つPを外す（`graph::profiles_in_use`）。
-- 探索結果は`fs::canonicalize`で実体のパスにそろえ（`\\?\`・`\\?\UNC\`は外す）、ジャンクション経由の重複を除く。別のtargetの内側にあるtargetは除く。
-- 走査エラーが1件でもあるtargetは見送る（先頭10件を記録）。
-- サイズは長さの合計で、ハードリンクを二重に数える（見込みが多めに出る）。
-- 終了コード: 0正常、1掃除後も警告上限を超えるtargetがある、2実行できなかった（設定の誤り・Everythingが応答しない）、3Prunletの結果が不明で中断した。
-- Pが1つも無いtarget（cargoのregistry・gitキャッシュなど、署名入りのCACHEDIR.TAGだけを持つもの）は、走査もR4もせず「P なし」で見送る。
-- 中断で残った`%TEMP%\scopula\<run-id>`は、次の正常な実行（dry-run以外）で、24時間より古いものだけPrunletで消す。
-- 登録（タスクスケジューラー）とインストールは別の担当が行う（`register.ps1`は置かない）。
+- 探索（es.exe・target判定・走査エラー）を変える前に[docs/agents/discovery-notes.md](docs/agents/discovery-notes.md)を読む。
+- 判定（R3・R6・指紋・サイズ）を変える前に[docs/agents/plan-r3-notes.md](docs/agents/plan-r3-notes.md)を読む。
+- 終了コード・一時フォルダー・導入を変える前に[docs/agents/run-lifecycle-notes.md](docs/agents/run-lifecycle-notes.md)を読む。
