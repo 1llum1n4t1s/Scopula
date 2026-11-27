@@ -1,0 +1,62 @@
+name: Scopula tests
+
+# main への push とすべての PR で、Windows の fmt・clippy・テストを動かす。
+# Linux と macOS は入れない。Scopula は Windows 専用のツールで（Win32 API のレジストリ・ボリューム判定、
+# LockFileEx のロック、Everything、cmd・icacls を使うテスト）、他の OS ではビルドもテストも成り立たないため。
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scopula-tests-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: cargo test (windows)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Prepare Rust
+        # rust-toolchain.toml が指定する版・component を導入する（target 追加が導入の契機になる）。
+        run: |
+          rustup target add x86_64-pc-windows-msvc
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Cache Rust build
+        # 保存は main だけ（PR は復元のみ）。
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Check formatting
+        run: |
+          cargo fmt --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Clippy
+        run: |
+          cargo clippy --all-targets --locked -- -D warnings
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Run the tests
+        # GitHub ランナーの既定 TEMP は 8.3 短縮名（例: RUNNER~1 を含むパス）になり、パスの照合が食い違うため、
+        # 長い名前の runner.temp を TEMP/TMP にする（CI の中だけの設定）。
+        env:
+          TEMP: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
+          RUST_BACKTRACE: '1'
+        run: |
+          cargo test --locked
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
