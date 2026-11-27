@@ -231,6 +231,38 @@ fn 指紋の無いユニットは7日で分かれる() {
 }
 
 #[test]
+fn 空の指紋ファイルは壊れではなく_指紋値なしで依存だけたどる() {
+    // cargo はビルドの前に指紋ファイルを空にする。ビルド失敗直後や途中はそのまま残る。
+    let b = fixture("empty-print");
+    lock(&b, "debug", DAY);
+    let e = "debug/build/app/fffffffffffffff1/fingerprint";
+    put_str(&b, &format!("{e}/bin-app"), DAY, "");
+    put_str(
+        &b,
+        &format!("{e}/bin-app.json"),
+        DAY,
+        "{\"deps\":[[1,\"x\",false,2]]}",
+    );
+    put(&b, "debug/build/app/fffffffffffffff1/out/o", DAY, 10);
+    unit(&b, "debug", "dep", "fffffffffffffff2", 2, &[], 20 * DAY); // 空の指紋のユニットから届く
+    unit(&b, "debug", "old", "fffffffffffffff3", 3, &[], 20 * DAY); // 届かない
+    put(&b, "debug/deps/a.rlib", 20 * DAY, 10);
+    let r = run(&b, u64::MAX);
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    assert_eq!(
+        names(&b, u64::MAX),
+        ["R1 debug/deps", "R3 debug/build/old/fffffffffffffff3"]
+    );
+    // 空以外の不正な中身は、これまでどおり壊れているとして止める。
+    let c = fixture("empty-print-bad");
+    lock(&c, "debug", DAY);
+    put_str(&c, &format!("{e}/bin-app"), DAY, "zz");
+    put_str(&c, &format!("{e}/bin-app.json"), DAY, "{\"deps\":[]}");
+    put(&c, "debug/build/app/fffffffffffffff1/out/o", DAY, 10);
+    assert_eq!(run(&c, u64::MAX).warnings.len(), 1);
+}
+
+#[test]
 fn 壊れた指紋はその_targetのr1とr3を実行せず警告する() {
     let cases = [
         ("json", "lib-x.json", "{ not json"),

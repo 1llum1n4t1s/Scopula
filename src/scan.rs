@@ -262,13 +262,22 @@ fn read_unit(node: &Node) -> Result<Unit, String> {
         }
         let text = fs::read_to_string(entry.path())
             .map_err(|e| format!("{}: {e}", entry.path().display()))?;
-        let print = parse_print(text.trim())
-            .ok_or_else(|| format!("{}: 指紋が16桁の16進でない", entry.path().display()))?;
+        // cargo はビルドの前に指紋ファイルを空にし、成功したら書き込む。0 バイトはビルド失敗の直後や
+        // 途中の状態なので壊れているとは扱わず、指紋値なし（他から参照されない）として依存だけ読む。
+        // 0 バイト以外の不正な中身は、これまでどおり壊れているとして止める。
+        let print = if text.is_empty() {
+            None
+        } else {
+            Some(
+                parse_print(text.trim())
+                    .ok_or_else(|| format!("{}: 指紋が16桁の16進でない", entry.path().display()))?,
+            )
+        };
         let json_path = fp.join(format!("{name}.json"));
         let json =
             fs::read_to_string(&json_path).map_err(|e| format!("{}: {e}", json_path.display()))?;
         let deps = parse_deps(&json).map_err(|e| format!("{}: {e}", json_path.display()))?;
-        unit.prints.push(print);
+        unit.prints.extend(print);
         unit.deps.extend(deps);
     }
     Ok(unit)
